@@ -100,3 +100,13 @@ begin
     use w ⊓ u, split, exact inf_le_left, refine ⟨⟨h, z_mem⟩, ⟨ X.presheaf.map (quiver.hom.op (ulift.up (plift.up (show w ⊓ u ≤ u, from inf_le_right)))) s, _⟩⟩,
     simp only [germ_res_apply], tidy, }
 end
+
+def Spe_presheaf : Top.presheaf Type* (Top.of (Spe X)) :=
+{ obj := λ u, continuous_map (unop u).1 (Spe X),
+  map := λ u v h f, ⟨λ x, f ⟨x, (quiver.hom.unop h).le x.2⟩, by continuity⟩ }
+
+def Spe_Presheafed_Space : PresheafedSpace Type* :=
+{ carrier := Top.of (Spe X),
+  presheaf := Spe_presheaf }
+
+lemma Spe_is_sheaf : is_sheaf (@Spe_presheaf X) := sorry
