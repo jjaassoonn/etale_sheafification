@@ -101,12 +101,17 @@ begin
     simp only [germ_res_apply], tidy, }
 end
 
-def Spe_presheaf : Top.presheaf Type* (Top.of (Spe X)) :=
-{ obj := λ u, continuous_map (unop u).1 (Spe X),
-  map := λ u v h f, ⟨λ x, f ⟨x, (quiver.hom.unop h).le x.2⟩, by continuity⟩ }
+def Spe_presheaf : Top.presheaf Type* X.1 :=
+{ obj := λ u, { f : continuous_map (unop u).1 (Spe X) // ∀ x, (pr ∘ f) x = x.1 },
+  map := λ u v h f, 
+    ⟨⟨λ x, f.1 ⟨x, ((quiver.hom.unop h).le x.2)⟩, by continuity⟩,
+    λ x, begin
+      simp only [continuous_map.coe_mk, function.comp_app, subtype.val_eq_coe],
+      convert f.2 ⟨x, ((quiver.hom.unop h).le x.2)⟩,
+    end⟩ }
 
 def Spe_Presheafed_Space : PresheafedSpace Type* :=
-{ carrier := Top.of (Spe X),
+{ carrier := Top.of X,
   presheaf := Spe_presheaf }
 
 lemma Spe_is_sheaf : is_sheaf (@Spe_presheaf X) := sorry
