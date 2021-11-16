@@ -3,6 +3,7 @@ import algebraic_geometry.stalks
 import topology.bases
 import algebra.category.CommRing.colimits
 import algebra.category.CommRing.filtered_colimits
+import topology.basic
 
 open algebraic_geometry category_theory
   algebraic_geometry.PresheafedSpace topological_space opposite
@@ -13,14 +14,26 @@ variables (X : PresheafedSpace CommRing)
 def Spe := Σ x, X.stalk x
 
 variables {X}
-def pr : Spe X → X := λ x, x.1
 
 structure is_basic_open_prop (u : opens X) (s : X.presheaf.obj (op u)) (x : Spe X) : Prop :=
 (pr_in : x.1 ∈ u)
 (is_stalk : x.2 = germ X.2 ⟨x.1, pr_in⟩ s)
 
+-- #print is_basic_open_prop
+
 def basic_open (u : opens X) (s : X.presheaf.obj (op u)) : set (Spe X) := set_of (is_basic_open_prop u s)
 -- #check is_basic_open
+
+def mem_basic_open (u : opens X) (s : X.2.obj (op u)) (x : Spe X) : x ∈ basic_open u s → Σ' (h : x.1 ∈ u), x.2 = germ X.2 ⟨x.1, h⟩ s := λ h,
+begin
+  refine ⟨h.1, h.2⟩,
+end
+
+def mem_basic_open' (u : opens X) (s : X.2.obj (op u)) (x : Spe X) : (Σ' (h : x.1 ∈ u), x.2 = germ X.2 ⟨x.1, h⟩ s) → x ∈ basic_open u s := λ ⟨h1, h2⟩,
+begin
+  refine ⟨h1, h2⟩,
+end
+
 def Spe_basis : set (set (Spe X)) := { V : set (Spe X) | ∃ (u : opens X) (s : X.presheaf.obj (op u)), V = basic_open u s }
 
 instance Spe_topology : topological_space (Spe X) := generate_from Spe_basis 
@@ -68,9 +81,22 @@ end
 (is_cont : continuous func)
 (is_section (x : u) : (func x).1 = x.1 )
 
-@[ext] lemma cont_sec_eq_iff (u : opens X) (s t : continuous_sections u) : s = t ↔ s.func = t.func :=
-⟨λ h, begin rw h end, λ h, begin ext1, exact h, end⟩
+def pr : Spe X → X := sigma.fst
 
+lemma pr_open_map : is_open_map (@pr X) := 
+begin
+  rw is_topological_basis.is_open_map_iff Spe_basis_is_topology_basis,
+  rintros V ⟨v, s, hv⟩,
+  rw hv,
+  convert v.2,
+  ext x, split; intros h, 
+  simp only [set.mem_image] at h,
+  obtain ⟨y, hy1, hy2⟩ := h,
+  have h := mem_basic_open v s y hy1,
+  cases h, unfold pr at hy2, rw hy2 at h_fst, exact h_fst,
+  unfold pr, simp only [basic_open, set.mem_image, set.mem_set_of_eq],
+  refine ⟨⟨x, germ X.2 ⟨x, h⟩ s⟩, _⟩, tidy,
+end
 
 noncomputable instance has_zero_continuous_sections (u : opens X) : has_zero (continuous_sections u) :=
 { zero := ⟨λ x, ⟨x.1, 0⟩, sorry, λ x, by refl⟩ }
@@ -86,20 +112,41 @@ noncomputable instance has_mul_continuous_sections (u : opens X) : has_mul (cont
 { mul := λ f g,
   { func := λ x : u, ⟨x.1, eq.rec (f.func x).2 (f.is_section x) * eq.rec (g.func x).2 (g.is_section x)⟩,
     is_cont := begin
+      set Ffunc := λ (x : u), (eq.rec (f.func x).snd (f.is_section x) : X.stalk x.1) with Ffunc_eq,
+      set Gfunc := λ (x : u), (eq.rec (g.func x).snd (g.is_section x) : X.stalk x.1) with Gfunc_eq,
       apply is_topological_basis.continuous Spe_basis_is_topology_basis,
+      
       rintros W ⟨w, s, hs⟩,
-      rw hs,
-      set w' : set (w.1.inter u.1) := { z | 
-          germ X.2 ⟨z.1, set.inter_subset_left _ _ z.2⟩ s = 
-          ((eq.rec (f.func ⟨z.1, set.inter_subset_right _ _ z.2⟩).2 (f.3 ⟨z.1, set.inter_subset_right _ _ z.2⟩)) : X.stalk z.1) *
-          ((eq.rec (g.func ⟨z.1, set.inter_subset_right _ _ z.2⟩).2 (g.3 ⟨z.1, set.inter_subset_right _ _ z.2⟩)) : X.stalk z.1) },
+      rw ←subset_interior_iff_open, intros x hx,
+      set t1 := Ffunc x with t1_eq,
+      set t2 := Gfunc x with t2_eq,
+      have t1_eq' : (eq.rec (f.func x).snd (f.3 x) : X.stalk x.1) = t1 := rfl,        
+      have t2_eq' : (eq.rec (g.func x).snd (g.3 x) : X.stalk x.1) = t2 := rfl,
+      rw hs at hx ⊢, simp only [set.mem_preimage] at hx ⊢,
+      have hx' := mem_basic_open w s _ hx,
+      rcases hx' with ⟨h1, h2⟩, dsimp only at h1 h2, rw [t1_eq', t2_eq'] at h2,
 
-      use (λ x : w.1.inter u.1, x.1) '' w',
-      refine ⟨_, _⟩,
+      obtain ⟨u_mul, xmemu_mul, s_mul, s_muleq⟩ := germ_exist X.2 x.1 (t1 * t2),
+      obtain ⟨u1, xmemu1, s1, s1eq⟩ := germ_exist X.2 x.1 t1,
+      obtain ⟨u2, xmemu2, s2, s2eq⟩ := germ_exist X.2 x.1 t2,
 
-      { sorry },
-      { sorry },
-
+      set res_u1_u12 := X.2.map (quiver.hom.op (ulift.up (plift.up (inf_le_left : u1 ⊓ u2 ≤ u1)))) with res_u1_u12_eq,
+      set res_u2_u12 := X.2.map (quiver.hom.op (ulift.up (plift.up (inf_le_right : u1 ⊓ u2 ≤ u2)))) with res_u2_u12_eq,
+      set proj_12_x := @germ _ _ _ X.1 X.2 (u1 ⊓ u2) ⟨x.1, ⟨xmemu1, xmemu2⟩⟩ with proj_12_x_eq,
+      have eq1 : t1 * t2 = proj_12_x (res_u1_u12 s1 * res_u2_u12 s2),
+      { rw [proj_12_x_eq, res_u1_u12_eq, res_u2_u12_eq],
+        simp only [ring_hom.map_mul, germ_res_apply],
+        rw [←s1eq, ←s2eq], refl, },
+      rw h2 at s_muleq,
+        
+      obtain ⟨o, xmemo, iw, iu_mul, res_eq⟩ := @germ_eq _ _ _ _ _ _ X.2 w u_mul x.1 h1 xmemu_mul s s_mul s_muleq.symm,
+      rw mem_interior, refine ⟨{z : u | z.1 ∈ o.1 }, _, _, by assumption⟩,
+      { rintros ⟨z, zmemu⟩ hz, 
+        simp only [set.mem_preimage, opens.mem_coe, set.mem_set_of_eq, subtype.coe_mk, subtype.val_eq_coe] at hz ⊢,
+        apply mem_basic_open', refine ⟨iw.le hz, _⟩,
+        sorry },
+      { rw is_open_induced_iff, refine ⟨o.1, o.2, _⟩, ext x, split; intros hx;
+        simp only [set.mem_preimage, opens.mem_coe, set.mem_set_of_eq, subtype.val_eq_coe] at hx ⊢; exact hx, },
     end,
     is_section := λ x, rfl } }
 
