@@ -117,7 +117,8 @@ noncomputable instance has_mul_continuous_sections (u : opens X) : has_mul (cont
       apply is_topological_basis.continuous Spe_basis_is_topology_basis,
       
       rintros W ⟨w, s, hs⟩,
-      rw ←subset_interior_iff_open, intros x hx,
+      rw ←subset_interior_iff_open, 
+      intros x hx,
       set t1 := Ffunc x with t1_eq,
       set t2 := Gfunc x with t2_eq,
       have t1_eq' : (eq.rec (f.func x).snd (f.3 x) : X.stalk x.1) = t1 := rfl,        
@@ -139,11 +140,17 @@ noncomputable instance has_mul_continuous_sections (u : opens X) : has_mul (cont
         rw [←s1eq, ←s2eq], refl, },
       rw h2 at s_muleq,
         
-      obtain ⟨o, xmemo, iw, iu_mul, res_eq⟩ := @germ_eq _ _ _ _ _ _ X.2 w u_mul x.1 h1 xmemu_mul s s_mul s_muleq.symm,
+      set res_w_uw := X.2.map (quiver.hom.op (ulift.up (plift.up (inf_le_right : u ⊓ w ≤ w)))) with res_w_uw_eq,
+      have smul_eq' : X.presheaf.germ ⟨x.val, _⟩ (res_w_uw s) = (X.presheaf.germ ⟨x.val, xmemu_mul⟩) s_mul,
+      { simp only [germ_res_apply], rw s_muleq, refl, },
+      obtain ⟨o, xmemo, iw, iu_mul, res_eq⟩ := @germ_eq _ _ _ _ _ _ X.2 (u ⊓ w) u_mul x.1 ⟨x.2, h1⟩ xmemu_mul (res_w_uw s) s_mul smul_eq',
       rw mem_interior, refine ⟨{z : u | z.1 ∈ o.1 }, _, _, by assumption⟩,
       { rintros ⟨z, zmemu⟩ hz, 
         simp only [set.mem_preimage, opens.mem_coe, set.mem_set_of_eq, subtype.coe_mk, subtype.val_eq_coe] at hz ⊢,
-        apply mem_basic_open', refine ⟨iw.le hz, _⟩,
+        apply mem_basic_open', refine ⟨_, _⟩, simp only,
+        suffices : u ⊓ w ≤ w, apply this, exact iw.le hz, exact inf_le_right,
+        
+        simp only [germ_res_apply, eq_self_iff_true, ring_hom.map_mul, subtype.val_eq_coe] at *,
         sorry },
       { rw is_open_induced_iff, refine ⟨o.1, o.2, _⟩, ext x, split; intros hx;
         simp only [set.mem_preimage, opens.mem_coe, set.mem_set_of_eq, subtype.val_eq_coe] at hx ⊢; exact hx, },
