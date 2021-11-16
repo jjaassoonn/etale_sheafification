@@ -7,7 +7,7 @@ import topology.basic
 
 open algebraic_geometry category_theory
   algebraic_geometry.PresheafedSpace topological_space opposite
-  category_theory.limits Top.presheaf
+  category_theory.limits Top.presheaf quiver.hom
 
 variables (X : PresheafedSpace CommRing)
 
@@ -24,12 +24,12 @@ structure is_basic_open_prop (u : opens X) (s : X.presheaf.obj (op u)) (x : Spe 
 def basic_open (u : opens X) (s : X.presheaf.obj (op u)) : set (Spe X) := set_of (is_basic_open_prop u s)
 -- #check is_basic_open
 
-def mem_basic_open (u : opens X) (s : X.2.obj (op u)) (x : Spe X) : x ∈ basic_open u s → Σ' (h : x.1 ∈ u), x.2 = germ X.2 ⟨x.1, h⟩ s := λ h,
+def mem_basic_open (u : opens X) (s : X.2.obj (op u)) (x : Spe X) : x ∈ basic_open u s → ∃ (h : x.1 ∈ u), x.2 = germ X.2 ⟨x.1, h⟩ s := λ h,
 begin
   refine ⟨h.1, h.2⟩,
 end
 
-def mem_basic_open' (u : opens X) (s : X.2.obj (op u)) (x : Spe X) : (Σ' (h : x.1 ∈ u), x.2 = germ X.2 ⟨x.1, h⟩ s) → x ∈ basic_open u s := λ ⟨h1, h2⟩,
+def mem_basic_open' (u : opens X) (s : X.2.obj (op u)) (x : Spe X) : (∃ (h : x.1 ∈ u), x.2 = germ X.2 ⟨x.1, h⟩ s) → x ∈ basic_open u s := λ ⟨h1, h2⟩,
 begin
   refine ⟨h1, h2⟩,
 end
@@ -93,13 +93,80 @@ begin
   simp only [set.mem_image] at h,
   obtain ⟨y, hy1, hy2⟩ := h,
   have h := mem_basic_open v s y hy1,
-  cases h, unfold pr at hy2, rw hy2 at h_fst, exact h_fst,
+  cases h with h1 h2, unfold pr at hy2, rw hy2 at h1, exact h1,
   unfold pr, simp only [basic_open, set.mem_image, set.mem_set_of_eq],
   refine ⟨⟨x, germ X.2 ⟨x, h⟩ s⟩, _⟩, tidy,
 end
 
+lemma aux_neg1 (v : opens X) (x : v) : germ X.2 x (0 : X.2.obj (op v)) = 0 :=
+begin
+  simp only [ring_hom.map_zero],
+end
+
+lemma aux0 (v : opens X) (t : X.2.obj (op v)) (x : v) (h : germ X.2 x t = 0) :
+  ∃ (v' : opens X) (hv' : v' ≤ v), x.1 ∈ v'.1 ∧ (X.2.map (quiver.hom.op (ulift.up (plift.up hv')))) t = 0 :=
+begin
+  rw ←aux_neg1 at h,
+  obtain ⟨w, memw, subset1, subset2, res_eq⟩ := germ_eq X.2 x.1 _ _ _ _ h,
+  use w, use subset1.le, refine ⟨memw, _⟩,
+  suffices : X.presheaf.map subset1.op t = 0, convert this, convert res_eq,
+  simp only [ring_hom.map_zero],
+  exact x.2, exact x.2,
+end
+
+lemma aux0' (v : opens X) (t : X.2.obj (op v)) (x : v) (h : ∃ (v' : opens X) (hv' : v' ≤ v), x.1 ∈ v'.1 ∧ (X.2.map (quiver.hom.op (ulift.up (plift.up hv')))) t = 0) :
+  germ X.2 x t = 0 :=
+begin
+  rcases h with ⟨w, hw, h1, h2⟩,
+  
+  suffices : X.2.germ (⟨x, h1⟩ : w) (X.2.map (quiver.hom.op (ulift.up (plift.up hw)))
+   t) = 0,
+  simp only [germ_res_apply] at this, erw this, erw h2,
+  simp only [ring_hom.map_zero],
+end
+
+lemma aux1 (v : opens X) (t : X.2.obj (op v)) (x : v) :
+  germ X.2 x t = 0 ↔ ∃ (v' : opens X) (hv' : v' ≤ v), x.1 ∈ v'.1 ∧ (X.2.map (quiver.hom.op (ulift.up (plift.up hv')))) t = 0 :=
+⟨by apply aux0, by apply aux0'⟩
+
 noncomputable instance has_zero_continuous_sections (u : opens X) : has_zero (continuous_sections u) :=
-{ zero := ⟨λ x, ⟨x.1, 0⟩, sorry, λ x, by refl⟩ }
+{ zero := ⟨λ x, ⟨x.1, 0⟩, 
+  begin
+    apply is_topological_basis.continuous Spe_basis_is_topology_basis,
+    rintros V ⟨v, s, Vv⟩, rw Vv,
+
+    have eq1 : ∀ x : u, x ∈ (λ (x : ↥u), (⟨x.val, 0⟩ : Spe X)) ⁻¹' basic_open v s ↔ 
+      (⟨x, 0⟩ : Spe X) ∈ basic_open v s,
+    { intros x, rw set.mem_preimage, refl, },
+    have eq2 : ∀ x : u, (⟨x, 0⟩ : Spe X) ∈ basic_open v s ↔ ∃ (h : (⟨x.1, 0⟩ : Spe X).fst ∈ v), (⟨x.1, 0⟩ : Spe X).snd = X.presheaf.germ ⟨x.1, h⟩ s,
+    { intro x, split; intro hx, apply mem_basic_open, exact hx,
+      apply mem_basic_open', exact hx, },
+    
+    have eq3 := λ x, iff.trans (eq1 x) (eq2 x),
+    have : (λ (x : ↥u), (⟨x.val, 0⟩ : Spe X)) ⁻¹' basic_open v s =
+      set_of (λ x : u, ∃ (h : (⟨x.1, 0⟩ : Spe X).fst ∈ v), (⟨x.1, 0⟩ : Spe X).snd = X.presheaf.germ ⟨x.1, h⟩ s),
+    { ext, rw eq3, refl, },
+    rw this,
+    rw ←subset_interior_iff_open, rintros ⟨x, xmemu⟩ hx,
+    simp only [set.mem_set_of_eq, subtype.coe_mk, subtype.val_eq_coe] at hx,
+    rcases hx with ⟨xmemv : x ∈ v, hx⟩,
+    replace hx := hx.symm,
+    rw aux1 at hx,
+
+    obtain ⟨⟨v', v'o⟩, hv', xmemv' : x ∈ v', hs⟩ := hx,
+    rw mem_interior,
+    use {x : u | x.1 ∈ v'}, refine ⟨_, _, _⟩,
+    { rintros ⟨y, ymemu⟩ (ymemv' : y ∈ v'),
+      refine ⟨hv' ymemv', _⟩,
+      simp only, symmetry,
+      rw aux1, use ⟨v', v'o⟩, use hv', refine ⟨ymemv', _⟩, exact hs, },
+    { rw is_open_induced_iff, use u.1 ∩ v', refine ⟨is_open.inter u.2 v'o, _⟩,
+      ext z, split; intros hz; 
+      simp only [set.mem_preimage, set.mem_inter_eq, opens.mem_coe, 
+        set.mem_set_of_eq, subtype.val_eq_coe] at hz ⊢,
+      exact hz.2, refine ⟨z.2, hz⟩, },
+    { simp only [set.mem_set_of_eq, subtype.coe_mk], exact xmemv', },
+  end, λ x, by refl⟩ }
 
 noncomputable instance has_add_continuous_sections (u : opens X) : has_add (continuous_sections u) :=
 { add := λ f g,
@@ -150,7 +217,9 @@ noncomputable instance has_mul_continuous_sections (u : opens X) : has_mul (cont
         apply mem_basic_open', refine ⟨_, _⟩, simp only,
         suffices : u ⊓ w ≤ w, apply this, exact iw.le hz, exact inf_le_right,
         
-        simp only [germ_res_apply, eq_self_iff_true, ring_hom.map_mul, subtype.val_eq_coe] at *,
+        simp only,
+        -- rw [t1_eq'],
+        -- simp only [germ_res_apply, eq_self_iff_true, ring_hom.map_mul, subtype.val_eq_coe] at *,
         sorry },
       { rw is_open_induced_iff, refine ⟨o.1, o.2, _⟩, ext x, split; intros hx;
         simp only [set.mem_preimage, opens.mem_coe, set.mem_set_of_eq, subtype.val_eq_coe] at hx ⊢; exact hx, },
